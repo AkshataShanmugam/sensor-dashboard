@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ref, get, set } from "firebase/database";
+import { ref, get, set, push } from "firebase/database";
 import { db } from "../firebase";
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
@@ -94,16 +94,27 @@ const LiveDataPage = () => {
   };
 
   const checkThresholds = () => {
+    const currentTime = Date.now();
     if (sensorData.length >= 5) {
+      console.log("checking...")
       const last5Temps = sensorData.slice(-5).map(item => item.temperature);
       const last5Humidity = sensorData.slice(-5).map(item => item.humidity);
       const last5AirQuality = sensorData.slice(-5).map(item => item.air_quality);
 
-      const tempAlert = last5Temps.every(val => (val > 30) || (val < 10));
+      const avgTemp = last5Temps.reduce((a, b) => a + b, 0) / last5Temps.length;
+      const avgHumidity = last5Humidity.reduce((a, b) => a + b, 0) / last5Humidity.length;
+      const avgAirQuality = last5AirQuality.reduce((a, b) => a + b, 0) / last5AirQuality.length;
+
+      const tempAlert = last5Temps.every(val => (val > 10) || (val < 10));
       const humidityAlert = last5Humidity.every(val => val > 60);
       const airQualityAlert = last5AirQuality.every(val => val > 50);
 
       if (tempAlert || humidityAlert || airQualityAlert) {
+        const alertType = tempAlert
+          ? 'Temperature Alert'
+          : humidityAlert
+          ? 'Humidity Alert'
+          : 'Air Quality Alert';
         const message = tempAlert
           ? 'Temperature is currently in an uncomfortable stage!'
           : humidityAlert
@@ -112,21 +123,47 @@ const LiveDataPage = () => {
         
         toast.error(message);
 
+        const readableTime = new Date(currentTime).toLocaleString();
+
+        // Prepare the email template parameters
+        const templateParams = {
+          timestamp: readableTime,
+          temperature: avgTemp.toFixed(1),
+          humidity: avgHumidity.toFixed(1),
+          air_quality: avgAirQuality.toFixed(1),
+        };
+
+        // Send email using EmailJS
+        sendEmail(templateParams);
+
+        // Prepare the alert data to log into Firebase
+        const alertData = {
+          type: alertType,
+          issue: message,
+          averageReadings: {
+            temperature: avgTemp.toFixed(1),
+            humidity: avgHumidity.toFixed(1),
+            airQuality: avgAirQuality.toFixed(1),
+          },
+          timestamp: readableTime,
+        };
+
+        // Reference to "alerts" collection in Firebase and push the data
+        const alertsRef = ref(db, "alerts");
+        push(alertsRef, alertData)
+          .then(() => {
+            console.log("Alert logged successfully:", alertData);
+          })
+          .catch((error) => {
+            console.error("Error logging alert to Firebase:", error);
+          });
+        
         if ("Notification" in window && Notification.permission === "granted") {
           new Notification("Alert!", { body: message });
         }
         try {
           const audio = new Audio("/simple-notification-152054.mp3");
           audio.play();
-          const templateParams = {
-            message,
-            avgTemp: avgTemp.toFixed(1),
-            avgHumidity: avgHumidity.toFixed(1),
-            avgAirQuality: avgAirQuality.toFixed(1),
-          };
-  
-          sendEmail(templateParams);
-          
         } catch (error) {
           console.error("Error playing audio:", error);
         }
@@ -148,8 +185,12 @@ const LiveDataPage = () => {
   }, []);
 
   useEffect(() => {
-    checkThresholds();
-  }, [sensorData]);
+    fetchData();
+    const interval = setInterval(() => {
+      checkThresholds();
+    }, 5 * 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   const chartData = {
     labels: sensorData.slice(-15).map(item => item.timestamp),
