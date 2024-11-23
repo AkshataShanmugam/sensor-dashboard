@@ -1,0 +1,45 @@
+.home-page {
+  text-align: center;
+  padding: 40px;
+  background: linear-gradient(to right, #eef2f3, #ffffff);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  font-family: 'Arial', sans-serif;
+}
+
+.home-page h1 {
+  font-size: 2.5rem;
+  color: #2c3e50;
+  margin-bottom: 20px;
+  font-weight: bold;
+}
+
+.links {
+  margin-top: 20px;
+}
+
+.links a {
+  text-decoration: none;
+  color: #3498db;
+  font-weight: bold;
+  font-size: 1.2rem;
+  padding: 10px 20px;
+  background-color: #1c1f1f;
+  border-radius: 30px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.links a:hover {
+  background-color: #3498db;
+  color: white;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+  transform: translateY(-3px);
+}
+
+.links a:focus {
+  outline: none;
+}
