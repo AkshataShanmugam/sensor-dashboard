@@ -118,6 +118,15 @@ const LiveDataPage = () => {
         try {
           const audio = new Audio("/simple-notification-152054.mp3");
           audio.play();
+          const templateParams = {
+            message,
+            avgTemp: avgTemp.toFixed(1),
+            avgHumidity: avgHumidity.toFixed(1),
+            avgAirQuality: avgAirQuality.toFixed(1),
+          };
+  
+          sendEmail(templateParams);
+          
         } catch (error) {
           console.error("Error playing audio:", error);
         }
