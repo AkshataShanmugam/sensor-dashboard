@@ -1,9 +1,26 @@
 import React, { useEffect, useState } from "react";
 import { useTable, useSortBy, usePagination } from "react-table";
 import './LiveDataTable.css';
-import { FaDownload } from "react-icons/fa"; 
+import { FaDownload } from "react-icons/fa";
 
-const LiveDataTable = ({ sensorData, currentPage } ) => {
+const LiveDataTable = ({ sensorData, currentPage }) => {
+  const [filteredData, setFilteredData] = useState(sensorData); // Filtered data
+  const [selectedMonth, setSelectedMonth] = useState(""); // Selected month for filtering
+
+  // Update filteredData whenever sensorData or selectedMonth changes
+  useEffect(() => {
+    if (selectedMonth) {
+      const monthFilteredData = sensorData.filter((row) => {
+        const timestamp = row.timestamp;
+        const [day, month, year] = timestamp.split(/[-_]/); // Split timestamp
+        const parsedMonth = new Date(`${month} 1`).getMonth() + 1; // Convert to numeric month
+        return parsedMonth === parseInt(selectedMonth);
+      });
+      setFilteredData(monthFilteredData);
+    } else {
+      setFilteredData(sensorData);
+    }
+  }, [sensorData, selectedMonth]);
 
   const columns = React.useMemo(
     () => [
@@ -35,17 +52,16 @@ const LiveDataTable = ({ sensorData, currentPage } ) => {
   } = useTable(
     {
       columns,
-      data: sensorData,
-      initialState: 
-      { 
-        pageIndex: currentPage, 
-        pageSize: 10, 
+      data: filteredData, // Use filtered data
+      initialState: {
+        pageIndex: currentPage,
+        pageSize: 10,
         sortBy: [
           {
             id: "timestamp", // Sort by the "timestamp" column
             desc: true, // Reverse order (descending)
-          }, 
-        ], 
+          },
+        ],
       },
     },
     useSortBy,
@@ -53,30 +69,42 @@ const LiveDataTable = ({ sensorData, currentPage } ) => {
   );
 
   const downloadCSV = () => {
-    // Convert the data to CSV format
     const headers = columns.map(column => column.Header);
-    const rows = sensorData.map(row => 
+    const rows = filteredData.map(row =>
       columns.map(column => row[column.accessor])
     );
-  
-    // Create CSV string
+
     const csvContent = [
       headers.join(','), // First row is the headers
       ...rows.map(row => row.join(',')) // Each row of data
     ].join('\n');
-  
-    // Create a link element to trigger the download
+
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = 'sensor_data.csv'; // Filename for the download
-    link.click(); // Trigger the download
+    link.download = 'sensor_data.csv';
+    link.click();
   };
-  
 
   return (
     <div className="sensor-data-container">
-      
+      {/* Filter by Month */}
+      <div className="filter-container">
+        <label htmlFor="month-filter">Filter by Month:</label>
+        <select
+          id="month-filter"
+          value={selectedMonth}
+          onChange={(e) => setSelectedMonth(e.target.value)}
+        >
+          <option value="" style={{fontFamily: "inherit" }}>All</option>
+          {[...Array(12)].map((_, i) => (
+            <option key={i + 1} value={i + 1}>
+              {new Date(0, i).toLocaleString("default", { month: "long" })}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {/* Table */}
       <button onClick={downloadCSV} className="download-csv-button">
         <FaDownload size={15} />

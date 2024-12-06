@@ -227,7 +227,7 @@ const LiveDataPage = () => {
     return <div>No data available</div>;
   }
 
-  const currentLightStatus = sensorData.slice(-2).every((item) => item.light_on === true) ? "ON" : "OFF";
+  const currentLightStatus = sensorData.slice(-1).every((item) => item.light_on === true) ? "ON" : "OFF";
 
   return (
     <div className="live-data-page">
