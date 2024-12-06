@@ -3,18 +3,19 @@
 #include <DHT11.h>
 #include <NTPClient.h>
 #include <WiFiUdp.h>
+#include <TimeLib.h> // Time management library
 
-#define WIFI_SSID // Add your own values
-#define WIFI_PASSWORD // Add your own values
+#define WIFI_SSID "Redmi Note 10S"
+#define WIFI_PASSWORD "0000 0000"
 
-#define FIREBASE_HOST // Add your own values
-#define FIREBASE_AUTH // Add your own values
+#define FIREBASE_HOST "https://iotelderlycare-default-rtdb.asia-southeast1.firebasedatabase.app/"
+#define FIREBASE_AUTH "sJUC2NjiIu5EtTKHUxQU5HLdM4QEO4tWRuC3ZHps"
 
 #define DHTPIN 2
 #define MQ135_PIN A0
 #define LDR_PIN 7
 #define LED_PIN LED_BUILTIN
-#define PIR_PIN 8
+#define PIR_PIN 12
 
 DHT11 dht(DHTPIN);
 FirebaseData firebaseData;
@@ -22,10 +23,8 @@ FirebaseAuth auth;
 FirebaseConfig config;
 
 WiFiUDP udp;
-NTPClient timeClient(udp, "pool.ntp.org", 19800, 60000); // IST timezone
+NTPClient timeClient(udp, "pool.ntp.org", 0, 60000); // Get UTC time
 
-// Variables to store system date and time
-int systemYear, systemMonth, systemDay, systemHour, systemMinute, systemSecond;
 bool sleepMode = false;
 
 void setup() {
@@ -48,12 +47,7 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
 
   timeClient.begin();
-  timeClient.update();
-
-  // Initialize system time with NTP time
-  unsigned long epochTime = timeClient.getEpochTime();  // Epoch time in seconds
-  epochTime += 19800;
-  setSystemTime(epochTime);
+  syncTimeWithNTP();
 }
 
 void loop() {
@@ -95,18 +89,15 @@ void loop() {
     Serial.println("Light turned OFF");
   }
 
-  // Update system time
-  updateSystemTime();
   // Format the system date and time
   String formattedDateTime = getFormattedDateTime();
-  String formattedDateTime2 = getFormattedDateTime();
   Serial.println("Formatted System Time: " + formattedDateTime);
 
   // Upload data to Firebase
   formattedDateTime.replace(" ", "_");
   formattedDateTime.replace(":", "-");
   String path = "/sensor_data/" + formattedDateTime;
-  Firebase.setString(firebaseData, path + "/timestamp", formattedDateTime2);
+  Firebase.setString(firebaseData, path + "/timestamp", formattedDateTime);
   Firebase.setBool(firebaseData, path + "/sleep_mode", sleepMode);
   Firebase.setInt(firebaseData, path + "/ldr_value", ldrValue);
   Firebase.setInt(firebaseData, path + "/pir_value", pirValue);
@@ -121,79 +112,29 @@ void loop() {
     Serial.println("Error uploading data: " + firebaseData.errorReason());
   }
 
-  delay(10000);  // 1-second delay
+  // Sync with NTP every 10 minutes
+  static unsigned long lastSync = 0;
+  if (millis() - lastSync > 600000) {
+    syncTimeWithNTP();
+    lastSync = millis();
+  }
+
+  delay(10000);  // 10-second delay
 }
 
-// Function to initialize system time
-void setSystemTime(unsigned long epochTime) {
-  systemYear = 1970;
-  systemMonth = 1;
-  systemDay = 1;
-
-  // Convert epoch time to system date and time
-  while (epochTime >= 31556926) { // Seconds in a year (excluding leap years)
-    systemYear++;
-    epochTime -= (isLeapYear(systemYear) ? 31622400 : 31536000);
-  }
-  while (epochTime >= (isLeapYear(systemYear) ? 2678400 : 2419200)) {
-    systemMonth++;
-    epochTime -= (isLeapYear(systemYear) && systemMonth == 2 ? 2505600 : daysInMonth(systemMonth, systemYear) * 86400);
-  }
-  systemDay += epochTime / 86400;
-  epochTime %= 86400;
-  systemHour = epochTime / 3600;
-  epochTime %= 3600;
-  systemMinute = epochTime / 60;
-  systemSecond = epochTime % 60;
-}
-
-// Function to update system time
-void updateSystemTime() {
-  systemSecond++;
-  if (systemSecond >= 60) {
-    systemSecond = 0;
-    systemMinute++;
-    if (systemMinute >= 60) {
-      systemMinute = 0;
-      systemHour++;
-      if (systemHour >= 24) {
-        systemHour = 0;
-        systemDay++;
-        if (systemDay > daysInMonth(systemMonth, systemYear)) {
-          systemDay = 1;
-          systemMonth++;
-          if (systemMonth > 12) {
-            systemMonth = 1;
-            systemYear++;
-          }
-        }
-      }
-    }
-  }
+// Function to sync time with NTP server
+void syncTimeWithNTP() {
+  timeClient.update();
+  unsigned long epochTime = timeClient.getEpochTime();
+  epochTime += 19800; // Add IST offset
+  setTime(epochTime); // Set time using TimeLib
 }
 
 // Function to get the formatted date and time
 String getFormattedDateTime() {
-  String monthNames[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-  String formattedTime = String(systemDay) + "-" + monthNames[systemMonth - 1] + "-" + String(systemYear) + " ";
-  formattedTime += (systemHour < 10 ? "0" : "") + String(systemHour) + ":";
-  formattedTime += (systemMinute < 10 ? "0" : "") + String(systemMinute) + ":";
-  formattedTime += (systemSecond < 10 ? "0" : "") + String(systemSecond);
+  String formattedTime = String(day()) + "-" + monthShortStr(month()) + "-" + String(year()) + " ";
+  formattedTime += (hour() < 10 ? "0" : "") + String(hour()) + ":";
+  formattedTime += (minute() < 10 ? "0" : "") + String(minute()) + ":";
+  formattedTime += (second() < 10 ? "0" : "") + String(second());
   return formattedTime;
-}
-
-// Helper function to check if a year is a leap year
-bool isLeapYear(int year) {
-  return ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0));
-}
-
-// Helper function to get the number of days in a month
-int daysInMonth(int month, int year) {
-  if (month == 2) {
-    return isLeapYear(year) ? 29 : 28;
-  }
-  if (month == 4 || month == 6 || month == 9 || month == 11) {
-    return 30;
-  }
-  return 31;
 }
